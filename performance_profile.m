@@ -24,7 +24,7 @@ for icase = 1:2
     numP  = numel(files);
     numA  = numel(algos);
 
-    latex_file = fullfile(folder,'latex_tables.tex');
+    latex_file = fullfile(folder,'latex_tables2.tex');
     fid = fopen(latex_file,'w');   % overwrite
     fclose(fid);
 
@@ -120,12 +120,9 @@ end
 % ============================================================
 function plot_performance_profile(M,algos,title_str)
 
-    valid = all(~isnan(M),2);   % only problems solved by all
-    M = M(valid,:);
+    numP = size(M,1);
 
-    if isempty(M), return; end
-
-    best = min(M,[],2);
+    best = min(M,[],2,'omitnan');
     rho  = M ./ best;
 
     tau = linspace(1,10,2000);
@@ -133,15 +130,15 @@ function plot_performance_profile(M,algos,title_str)
 
     figure; hold on;
     for a = 1:size(M,2)
-        y = arrayfun(@(t) mean(rho(:,a) <= t), tau);
-        plot(tau,y,'LineWidth',2,'LineStyle', linestyles(a));
+        y = arrayfun(@(t) sum(rho(:,a) <= t,'omitnan') / numP, tau);
+        plot(tau,y,'LineWidth',2,'LineStyle', linestyles{a});
     end
 
-    set(gca,'FontSize',16,'TickLabelInterpreter', 'latex');
+    set(gca,'FontSize',16,'TickLabelInterpreter','latex');
     xlabel('$\tau$','Interpreter','latex');
     ylabel('$\rho_a(\tau)$','Interpreter','latex');
     title(title_str,'Interpreter','latex');
-    legend(algos,'Location','SouthEast', 'Interpreter', 'latex');
+    legend(algos,'Location','SouthEast','Interpreter','latex');
     ylim([0 1.01])
     grid on;
 end
