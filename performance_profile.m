@@ -137,11 +137,11 @@ function plot_performance_profile(M,algos,title_str)
         plot(tau,y,'LineWidth',2,'LineStyle', linestyles(a));
     end
 
-    set(gca,'FontSize',16);
+    set(gca,'FontSize',16,'TickLabelInterpreter', 'latex');
     xlabel('$\tau$','Interpreter','latex');
     ylabel('$\rho_a(\tau)$','Interpreter','latex');
     title(title_str,'Interpreter','latex');
-    legend(algos,'Location','SouthEast');
+    legend(algos,'Location','SouthEast', 'Interpreter', 'latex');
     ylim([0 1.01])
     grid on;
 end
