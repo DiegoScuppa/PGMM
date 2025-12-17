@@ -1,12 +1,14 @@
 %% ============================================================
 %  COMPARISON OF ALGORITHMS
 %  Tables: mean ± std over ALL runs
-%  Performance profiles: ONLY successful runs
+%  Performance profiles:
+%    - L1-ball : each RUN is a problem
+%    - box-bounds : each PROBLEM is a problem (averaged runs)
 % ============================================================
 
 clear; clc;
 
-algos = {'SPG', 'PGMM'};
+algos = {'SPG','PGMM'};
 tol   = 1e-5;
 
 for icase = 1:2
@@ -24,14 +26,20 @@ for icase = 1:2
     numP  = numel(files);
     numA  = numel(algos);
 
-    latex_file = fullfile(folder,'latex_tables2.tex');
-    fid = fopen(latex_file,'w');   % overwrite
-    fclose(fid);
+    %% ================= LATEX FILE ============================
+    latex_file = fullfile(folder,'latex_tables.tex');
+    fid = fopen(latex_file,'w'); fclose(fid);
 
-    %% ================= MATRICES FOR PERFORMANCE PROFILES =====
-    TimePP = NaN(numP,numA);
-    IterPP = NaN(numP,numA);
-    CostPP = NaN(numP,numA);
+    %% ================= PERFORMANCE PROFILE STORAGE ===========
+    if icase == 1
+        TimePP = [];
+        IterPP = [];
+        CostPP = [];
+    else
+        TimePP = NaN(numP,numA);
+        IterPP = NaN(numP,numA);
+        CostPP = NaN(numP,numA);
+    end
 
     %% ================= LOOP OVER PROBLEMS ====================
     for p = 1:numP
@@ -39,27 +47,23 @@ for icase = 1:2
         data = load(fullfile(folder,files(p).name));
         T = data.results;
 
-        % problem name
         [~,fname] = fileparts(files(p).name);
         parts = split(fname,'_');
         problem_name = strjoin(parts(2:end),'_');
 
-        %% ===== STATISTICS PER ALGORITHM =======================
+        %% ===== TABLE STATISTICS ===============================
         MeanIter = NaN(numA,1);  StdIter = NaN(numA,1);
         MeanTime = NaN(numA,1);  StdTime = NaN(numA,1);
         MeanCost = NaN(numA,1);  StdCost = NaN(numA,1);
         NumFail  = zeros(numA,1);
 
         for a = 1:numA
-
             Ta = T(strcmp(T.Version,algos{a}),:);
             if isempty(Ta), continue; end
 
-            % failures
             fail = Ta.FinalGradNorm > tol;
             NumFail(a) = sum(fail);
 
-            % ===== TABLE STATISTICS (ALL RUNS) ==================
             MeanIter(a) = mean(Ta.Iterations);
             StdIter(a)  = std(Ta.Iterations);
 
@@ -68,13 +72,46 @@ for icase = 1:2
 
             MeanCost(a) = mean(Ta.CostEvals);
             StdCost(a)  = std(Ta.CostEvals);
+        end
 
-            % ===== PERFORMANCE PROFILE (ONLY VALID RUNS) ========
-            Ta_ok = Ta(~fail,:);
-            if ~isempty(Ta_ok)
-                TimePP(p,a) = mean(Ta_ok.Time);
-                IterPP(p,a) = mean(Ta_ok.Iterations);
-                CostPP(p,a) = mean(Ta_ok.CostEvals);
+        %% ===== PERFORMANCE PROFILE ============================
+        if icase == 1
+            % --- each RUN is a problem
+            nRuns = max(arrayfun(@(ia) ...
+                sum(strcmp(T.Version,algos{ia})), 1:numA));
+
+            for r = 1:nRuns
+                rowT = NaN(1,numA);
+                rowI = NaN(1,numA);
+                rowC = NaN(1,numA);
+
+                for ia = 1:numA
+                    Ta = T(strcmp(T.Version,algos{ia}),:);
+                    if height(Ta) < r, continue; end
+
+                    if Ta.FinalGradNorm(r) <= tol
+                        rowT(ia) = Ta.Time(r);
+                        rowI(ia) = Ta.Iterations(r);
+                        rowC(ia) = Ta.CostEvals(r);
+                    end
+                end
+
+                TimePP = [TimePP; rowT];
+                IterPP = [IterPP; rowI];
+                CostPP = [CostPP; rowC];
+            end
+
+        else
+            % --- standard: one problem = one row
+            for a = 1:numA
+                Ta = T(strcmp(T.Version,algos{a}),:);
+                fail = Ta.FinalGradNorm > tol;
+                Ta_ok = Ta(~fail,:);
+                if ~isempty(Ta_ok)
+                    TimePP(p,a) = mean(Ta_ok.Time);
+                    IterPP(p,a) = mean(Ta_ok.Iterations);
+                    CostPP(p,a) = mean(Ta_ok.CostEvals);
+                end
             end
         end
 
@@ -83,8 +120,7 @@ for icase = 1:2
 
         fprintf(fid,'%% =========================================\n');
         fprintf(fid,'%% Problem: %s\n',problem_name);
-        fprintf(fid,'\\begin{table}[h]\n');
-        fprintf(fid,'\\centering\n');
+        fprintf(fid,'\\begin{table}[h]\n\\centering\n');
         fprintf(fid,'\\begin{tabular}{lcccc}\n');
         fprintf(fid,'\\toprule\n');
         fprintf(fid,'Algorithm & Iterations & Time & CostEvals & Failures\\\\\n');
@@ -100,8 +136,7 @@ for icase = 1:2
                 NumFail(a));
         end
 
-        fprintf(fid,'\\bottomrule\n');
-        fprintf(fid,'\\end{tabular}\n');
+        fprintf(fid,'\\bottomrule\n\\end{tabular}\n');
         fprintf(fid,'\\caption{Results for problem %s}\n',problem_name);
         fprintf(fid,'\\end{table}\n\n');
 
@@ -111,7 +146,7 @@ for icase = 1:2
     %% ================= PERFORMANCE PROFILES ==================
     plot_performance_profile(TimePP,algos,'Performance Profile (CPU Time)');
     plot_performance_profile(IterPP,algos,'Performance Profile (Iterations)');
-    plot_performance_profile(CostPP,algos,'Performance Profile (Cost Evaluations)');
+    plot_performance_profile(CostPP,algos,'Performance Profile (Function Evaluations)');
 
 end
 
@@ -131,14 +166,14 @@ function plot_performance_profile(M,algos,title_str)
     figure; hold on;
     for a = 1:size(M,2)
         y = arrayfun(@(t) sum(rho(:,a) <= t,'omitnan') / numP, tau);
-        plot(tau,y,'LineWidth',2,'LineStyle', linestyles{a});
+        plot(tau,y,'LineWidth',2,'LineStyle',linestyles{a});
     end
 
-    set(gca,'FontSize',16,'TickLabelInterpreter','latex');
+    set(gca,'FontSize',30,'TickLabelInterpreter','latex');
     xlabel('$\tau$','Interpreter','latex');
     ylabel('$\rho_a(\tau)$','Interpreter','latex');
     title(title_str,'Interpreter','latex');
     legend(algos,'Location','SouthEast','Interpreter','latex');
-    ylim([0 1.01])
+    ylim([0 1.01]); xlim([1 10]);
     grid on;
 end
